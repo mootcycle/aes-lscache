@@ -40,6 +40,9 @@ var lscache = function() {
   var cachedStorage;
   var cachedJSON;
   var cacheBucket = '';
+  var encryptionKey;
+  var crypt2plain = {};
+  var plain2crypt = {};
 
   // Determines if localStorage is supported in the browser;
   // result is cached for better performance instead of being run each time.
@@ -95,17 +98,65 @@ var lscache = function() {
    */
 
   function getItem(key) {
-    return localStorage.getItem(CACHE_PREFIX + cacheBucket + key);
+    return dec(localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key)));
   }
 
   function setItem(key, value) {
     // Fix for iPad issue - sometimes throws QUOTA_EXCEEDED_ERR on setItem.
-    localStorage.removeItem(CACHE_PREFIX + cacheBucket + key);
-    localStorage.setItem(CACHE_PREFIX + cacheBucket + key, value);
+      
+    localStorage.removeItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key));
+    localStorage.setItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key), enc(value));
   }
 
   function removeItem(key) {
-    localStorage.removeItem(CACHE_PREFIX + cacheBucket + key);
+    localStorage.removeItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key));
+  }
+
+  function updateEncryptionKeys() {
+    crypt2plain = {};
+    plain2crypt = {};
+    
+    enc(cacheBucket);
+    enc(CACHE_PREFIX);
+    enc(CACHE_SUFFIX);
+    
+    for (var i in localStorage) {
+      try {
+        var arr = i.split('\n');
+        for (var j in arr) {
+          if (arr[j]) {
+            dec(arr[j] + '\n');
+          }
+        }
+      } catch(err) {
+        // This didn't decrypt properly. Maybe not a aes-lscache value.
+        console.log("dec err: " + err);
+      }
+    }
+  }
+  
+  function enc(plainText) {
+    if (!encryptionKey) return plainText;
+    if (plain2crypt[plainText]) return plain2crypt[plainText];
+    
+    var cypherText = GibberishAES.enc(plainText, encryptionKey);
+  
+    crypt2plain[cypherText] = plainText;
+    plain2crypt[plainText] = cypherText;
+    
+    return cypherText
+  }
+  
+  function dec(cypherText) {
+    if (!cypherText || !encryptionKey) return cypherText;
+    if (crypt2plain[cypherText]) return crypt2plain[cypherText];
+    
+    var plainText = GibberishAES.dec(cypherText, encryptionKey);
+    
+    crypt2plain[cypherText] = plainText;
+    plain2crypt[plainText] = cypherText;
+    
+    return plainText;
   }
 
   return {
@@ -271,6 +322,8 @@ var lscache = function() {
      */
     setBucket: function(bucket) {
       cacheBucket = bucket;
+      
+      updateEncryptionKeys();
     },
     
     /**
@@ -278,6 +331,20 @@ var lscache = function() {
      */
     resetBucket: function() {
       cacheBucket = '';
+      
+      updateEncryptionKeys();
+    },
+    
+    setEncryptionKey: function(key) {
+      encryptionKey = key;
+      
+      updateEncryptionKeys();
+    },
+    
+    clearEncryptionKey: function() {
+      encryptionKey = null;
+      
+      updateEncryptionKeys();
     }
   };
 }();
