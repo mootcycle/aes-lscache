@@ -110,6 +110,12 @@ var lscache = function() {
 
   function removeItem(key) {
     localStorage.removeItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key));
+    
+    delete(crypt2plain[localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key))]);
+    delete(plain2crypt[dec(localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key)))]);
+    
+    delete(crypt2plain[enc(key)]);
+    delete(plain2crypt[key]);
   }
 
   function updateEncryptionKeys() {
@@ -147,14 +153,16 @@ var lscache = function() {
     return cypherText
   }
   
-  function dec(cypherText) {
+  function dec(cypherText, skipCache) {
     if (!cypherText || !encryptionKey) return cypherText;
     if (crypt2plain[cypherText]) return crypt2plain[cypherText];
     
     var plainText = GibberishAES.dec(cypherText, encryptionKey);
     
-    crypt2plain[cypherText] = plainText;
-    plain2crypt[plainText] = cypherText;
+    if (!skipCache) {
+      crypt2plain[cypherText] = plainText;
+      plain2crypt[plainText] = cypherText;
+    }
     
     return plainText;
   }
