@@ -1,163 +1,52 @@
-lscache
+aes-lscache
 ===============================
-This is a simple library that emulates `memcache` functions using HTML5 `localStorage`, so that you can cache data on the client
-and associate an expiration time with each piece of data. If the `localStorage` limit (~5MB) is exceeded, it tries to create space by removing the items that are closest to expiring anyway. If `localStorage` is not available at all in the browser, the library degrades by simply not caching and all cache requests return null.
+This is a fork of the excellent lscache module to add AES encryption to the local store. For most of the documentation, please refer to the original repo here:
+https://github.com/pamelafox/lscache
 
-Methods
+I'm using Gibberish-AES to provide the encryption, which is available here:
+https://github.com/mdp/gibberish-aes/
+
+This is mostly an experiment based on my thoughts about Nicholas Zakas's blog post on the need for secure local storage:
+http://www.nczonline.net/blog/2010/04/13/towards-more-secure-client-side-data-storage/
+
+Additional Methods
 -------
 
-The library exposes 4 methods: `set()`, `get()`, `remove()`, and `flush()`.
-
-* * *
-
-### lscache.set
-Stores the value in localStorage. Expires after specified number of minutes.
-#### Arguments
-1. `key` (**string**)
-2. `value` (**Object|string**)
-3. `time` (**number: optional**)
-
-* * *
-
-### lscache.get
-Retrieves specified value from localStorage, if not expired.
-#### Arguments
-1. `key` (**string**)
-#### Returns
-**string | Object** : The stored value.
-
-* * *
-
-### lscache.remove
-Removes a value from localStorage.
+### lscache.setEncryptionKey
+Sets the passphrase that will be used to encrypt/decrypt the data.
 #### Arguments
 1. `key` (**string**)
 
 * * *
 
-### lscache.flush
-Removes all lscache items from localStorage without affecting other data.
-
-* * *
-
-### lscache.setBucket
-Appends CACHE_PREFIX so lscache will partition data in to different buckets
-#### Arguments
-1. `bucket` (**string**)
+### lscache.clearEncryptionKey
+Removes the encryption key and clears the encryption cache.
 
 Usage
 -------
 
-The interface should be familiar to those of you who have used `memcache`, and should be easy to understand for those of you who haven't.
-
-For example, you can store a string for 2 minutes using `lscache.set()`:
+This is supposed to work identically to lscache, but with the added (very simple) encryption.
 
 ```js
+lscache.setEncryptionKey("myVeryStrongPassword");
 lscache.set('greeting', 'Hello World!', 2);
 ```
 
-You can then retrieve that string with `lscache.get()`:
+After a browser refresh:
 
 ```js
-alert(lscache.get('greeting'));
+console.log(lscache.get('greeting'));
+// null
+lscache.setEncryptionKey("myVeryStrongPassword");
+lscache.get('greeting');
+// "Hello World!"
 ```
 
-You can remove that string from the cache entirely with `lscache.remove()`:
-
+Looking at localStorage shows that we're not leaking variable or bucket names and the values are encrypted:
 ```js
-lscache.remove('greeting');
+console.log(Object.keys(localStorage)[0]);
+// "U2FsdGVkX1+ePtMnRyd4XGMgT+6PPHFJwflMAPAm908=\nU2FsdGVkX19DJPfXBhkHNWqOe4eZjjU6jqbRH9Nssjg=\nU2FsdGVkX1+wCOwnYu8kW5cL3PtLDfuM6ZbcqIqzFB9orHCIR13okZxEWYBf7HzG\n"
+console.log(localStorage["U2FsdGVkX1+ePtMnRyd4XGMgT+6PPHFJwflMAPAm908=\nU2FsdGVkX19DJPfXBhkHNWqOe4eZjjU6jqbRH9Nssjg=\nU2FsdGVkX1+wCOwnYu8kW5cL3PtLDfuM6ZbcqIqzFB9orHCIR13okZxEWYBf7HzG\n"]);
+// U2FsdGVkX18GFlWv+0KCPf9cOl3V5Ccm0fR7tDp1NJI=\n
 ```
-
-You can remove all items from the cache entirely with `lscache.flush()`:
-
-```js
-lscache.flush();
-```
-
-The library also takes care of serializing objects, so you can store more complex data:
-
-```js
-lscache.set('data', {'name': 'Pamela', 'age': 26}, 2);
-```
-
-And then when you retrieve it, you will get it back as an object:
-
-```js
-alert(lscache.get('data').name);
-```
-
-If you have multiple instances of lscache running on the same domain, you can partition data in a certain bucket via:
-
-```js
-lscache.set('response', '...', 2);
-lscache.setBucket('lib');
-lscache.set('path', '...', 2);
-lscache.flush(); //only removes 'path' which was set in the lib bucket
-```
-
-For more live examples, play around with the demo here:
-http://pamelafox.github.com/lscache/demo.html
-
-
-Real-World Usage
-----------
-This library was originally developed with the use case of caching results of JSON API queries
-to speed up my webapps and give them better protection against flaky APIs.
-(More on that in this [blog post](http://blog.pamelafox.org/2010/10/lscache-localstorage-based-memcache.html))
-
-For example, [RageTube](http://ragetube.net) uses `lscache` to fetch Youtube API results for 10 minutes:
-
-```js
-var key = 'youtube:' + query;
-var json = lscache.get(key);
-if (json) {
-  processJSON(json);
-} else {
-  fetchJSON(query);
-}
-
-function processJSON(json) {
-  // ..
-}
-
-function fetchJSON() {
-  var searchUrl = 'http://gdata.youtube.com/feeds/api/videos';
-  var params = {
-   'v': '2', 'alt': 'jsonc', 'q': encodeURIComponent(query)
-  }
-  JSONP.get(searchUrl, params, null, function(json) {
-    processJSON(json);
-    lscache.set(key, json, 10);
-  });
-}
-```
-
-It does not have to be used for only expiration-based caching, however. It can also be used as just a wrapper for `localStorage`, as it provides the benefit of handling JS object (de-)serialization.
-
-For example, the [QuizCards](http://quizcards.info) Chrome extensions use `lscache`
-to store the user statistics for each user bucket, and those stats are an array
-of objects.
-
-```js
-function initBuckets() {
-  var bucket1 = [];
-  for (var i = 0; i < CARDS_DATA.length; i++) {
-    var datum = CARDS_DATA[i];
-    bucket1.push({'id': datum.id, 'lastAsked': 0});
-  }
-  lscache.set(LS_BUCKET + 1, bucket1);
-  lscache.set(LS_BUCKET + 2, []);
-  lscache.set(LS_BUCKET + 3, []);
-  lscache.set(LS_BUCKET + 4, []);
-  lscache.set(LS_BUCKET + 5, []);
-  lscache.set(LS_INIT, 'true')
-}
-```
-
-Browser Support
-----------------
-
-The `lscache` library should work in all browsers where `localStorage` is supported.
-A list of those is here:
-http://www.quirksmode.org/dom/html5.html
 
