@@ -98,21 +98,18 @@ var lscache = function() {
    */
 
   function getItem(key) {
-    return dec(localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key)));
+    return dec(localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key)), true);
   }
 
   function setItem(key, value) {
     // Fix for iPad issue - sometimes throws QUOTA_EXCEEDED_ERR on setItem.
       
     localStorage.removeItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key));
-    localStorage.setItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key), enc(value));
+    localStorage.setItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key), enc(value, true));
   }
 
   function removeItem(key) {
     localStorage.removeItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key));
-    
-    delete(crypt2plain[localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key))]);
-    delete(plain2crypt[dec(localStorage.getItem(enc(CACHE_PREFIX) + enc(cacheBucket) + enc(key)))]);
     
     delete(crypt2plain[enc(key)]);
     delete(plain2crypt[key]);
@@ -135,20 +132,21 @@ var lscache = function() {
           }
         }
       } catch(err) {
-        // This didn't decrypt properly. Maybe not a aes-lscache value.
-        console.log("dec err: " + err);
+        // This didn't decrypt properly; ignore it.
       }
     }
   }
   
-  function enc(plainText) {
+  function enc(plainText, skipCache) {
     if (!encryptionKey) return plainText;
     if (plain2crypt[plainText]) return plain2crypt[plainText];
     
     var cypherText = GibberishAES.enc(plainText, encryptionKey);
   
-    crypt2plain[cypherText] = plainText;
-    plain2crypt[plainText] = cypherText;
+    if (!skipCache) {
+      crypt2plain[cypherText] = plainText;
+      plain2crypt[plainText] = cypherText;
+    }
     
     return cypherText
   }
